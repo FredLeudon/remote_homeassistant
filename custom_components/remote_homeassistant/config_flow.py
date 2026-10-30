@@ -21,6 +21,7 @@ from homeassistant.const import (
     CONF_TYPE,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 from homeassistant.helpers.instance_id import async_get
 from homeassistant.util import slugify
 
@@ -30,6 +31,7 @@ from .const import (
     CONF_ENTITY_FRIENDLY_NAME_PREFIX,
     CONF_EXCLUDE_DOMAINS,
     CONF_EXCLUDE_ENTITIES,
+    CONF_EXCLUDE_ENTITY_PREFIXES,
     CONF_FILTER,
     CONF_INCLUDE_DOMAINS,
     CONF_INCLUDE_ENTITIES,
@@ -339,6 +341,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_EXCLUDE_ENTITIES,
                         default=self._default(CONF_EXCLUDE_ENTITIES),
                     ): cv.multi_select(entities),
+                    # suggested_value (not default) so that clearing the list
+                    # really removes all prefixes
+                    vol.Optional(
+                        CONF_EXCLUDE_ENTITY_PREFIXES,
+                        description={
+                            "suggested_value": self.config_entry.options.get(
+                                CONF_EXCLUDE_ENTITY_PREFIXES
+                            )
+                        },
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(multiple=True)
+                    ),
                 }
             ),
         )

@@ -131,6 +131,9 @@ remote_homeassistant:
       - persistent_notification
       entities:
       - group.all_switches
+      entity_prefixes:
+      - instance01_
+      - instance02_
     filter:
     - entity_id: sensor.faulty_pc_energy
       above: 100
@@ -204,6 +207,9 @@ exclude:
       type: list
     domains:
       description: The list of domains to be excluded from the remote instance
+      type: list
+    entity_prefixes:
+      description: Entities whose entity id (e.g. "sensor.instance01_") or object id (e.g. "instance01_") starts with one of these prefixes are excluded. Use it to avoid loops when two instances import each other, by excluding the entity prefixes used on both sides.
       type: list
 filter:
   description: Filters out states above or below a certain threshold, e.g. outliers reported by faulty sensors

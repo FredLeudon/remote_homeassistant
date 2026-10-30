@@ -48,7 +48,8 @@
           "include_domains": "Domains einbeziehen",
           "include_entities": "Entitäten einbeziehen",
           "exclude_domains": "Domains ausschließen",
-          "exclude_entities": "Entitäten ausschließen"
+          "exclude_entities": "Entitäten ausschließen",
+          "exclude_entity_prefixes": "Entitäten ausschließen, die beginnen mit"
         }
       },
       "general_filters": {

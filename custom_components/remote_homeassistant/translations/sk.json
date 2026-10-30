@@ -48,7 +48,8 @@
             "include_domains": "Zahrnúť domény",
             "include_entities": "Zahrnúť entity",
             "exclude_domains": "Vylúčiť domény",
-            "exclude_entities": "Vylúčiť entity"
+            "exclude_entities": "Vylúčiť entity",
+            "exclude_entity_prefixes": "Vylúčiť entity začínajúce na"
           }
         },
         "general_filters": {

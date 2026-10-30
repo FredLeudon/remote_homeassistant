@@ -46,6 +46,7 @@ from homeassistant.setup import async_setup_component
 from custom_components.remote_homeassistant.views import DiscoveryInfoView
 
 from .const import (CONF_EXCLUDE_DOMAINS, CONF_EXCLUDE_ENTITIES,
+                    CONF_EXCLUDE_ENTITY_PREFIXES,
                     CONF_INCLUDE_DOMAINS, CONF_INCLUDE_ENTITIES,
                     CONF_LOAD_COMPONENTS, CONF_OPTIONS, CONF_REMOTE_CONNECTION,
                     CONF_SERVICE_PREFIX, CONF_SERVICES, CONF_UNSUB_LISTENER,
@@ -64,6 +65,7 @@ CONF_ENTITY_PREFIX = "entity_prefix"
 CONF_ENTITY_FRIENDLY_NAME_PREFIX = "entity_friendly_name_prefix"
 CONF_FILTER = "filter"
 CONF_MAX_MSG_SIZE = "max_message_size"
+CONF_ENTITY_PREFIXES = "entity_prefixes"
 
 STATE_INIT = "initializing"
 STATE_CONNECTING = "connecting"
@@ -88,6 +90,9 @@ INSTANCES_SCHEMA = vol.Schema(
             {
                 vol.Optional(CONF_ENTITIES, default=[]): cv.entity_ids,
                 vol.Optional(CONF_DOMAINS, default=[]): vol.All(
+                    cv.ensure_list, [cv.string]
+                ),
+                vol.Optional(CONF_ENTITY_PREFIXES, default=[]): vol.All(
                     cv.ensure_list, [cv.string]
                 ),
             }
@@ -161,6 +166,8 @@ def async_yaml_to_config_entry(instance_conf):
             options[CONF_EXCLUDE_ENTITIES] = exclude[CONF_ENTITIES]
         if CONF_DOMAINS in exclude:
             options[CONF_EXCLUDE_DOMAINS] = exclude[CONF_DOMAINS]
+        if CONF_ENTITY_PREFIXES in exclude:
+            options[CONF_EXCLUDE_ENTITY_PREFIXES] = exclude[CONF_ENTITY_PREFIXES]
 
     for option in [
         CONF_FILTER,
@@ -320,6 +327,12 @@ class RemoteConnection:
         self._whitelist_d = set(config_entry.options.get(CONF_INCLUDE_DOMAINS, []))
         self._blacklist_e = set(config_entry.options.get(CONF_EXCLUDE_ENTITIES, []))
         self._blacklist_d = set(config_entry.options.get(CONF_EXCLUDE_DOMAINS, []))
+        # Empty prefixes are dropped, otherwise they would exclude everything
+        self._blacklist_p = tuple(
+            prefix.strip().lower()
+            for prefix in config_entry.options.get(CONF_EXCLUDE_ENTITY_PREFIXES, [])
+            if prefix.strip()
+        )
 
         self._filter = [
             {
@@ -680,11 +693,20 @@ class RemoteConnection:
 
         def state_changed(entity_id, state, attr):
             """Publish remote state change on local instance."""
-            domain, _object_id = split_entity_id(entity_id)
+            domain, object_id = split_entity_id(entity_id)
 
             self._all_entity_names.add(entity_id)
 
             if entity_id in self._blacklist_e or domain in self._blacklist_d:
+                return
+
+            # Prefixes match either the full entity id ("sensor.remote_") or
+            # the object id ("remote_"), e.g. to avoid re-importing entities
+            # the remote instance itself imported from us.
+            if self._blacklist_p and (
+                entity_id.startswith(self._blacklist_p)
+                or object_id.startswith(self._blacklist_p)
+            ):
                 return
 
             if (
