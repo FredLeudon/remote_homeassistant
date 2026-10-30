@@ -12,6 +12,7 @@ import fnmatch
 import inspect
 import logging
 import re
+from collections import deque
 from contextlib import suppress
 
 import aiohttp
@@ -144,6 +145,9 @@ CONFIG_SCHEMA = vol.Schema(
 
 HEARTBEAT_INTERVAL = 20
 HEARTBEAT_TIMEOUT = 5
+
+# Number of local events remembered to detect events sent back by the remote
+LOCAL_EVENTS_HISTORY = 1000
 
 INTERNALLY_USED_EVENTS = [EVENT_STATE_CHANGED]
 
@@ -361,6 +365,8 @@ class RemoteConnection:
         self._all_entity_names = set()
         self._handlers = {}
         self._remove_listener = None
+        self._remove_event_listeners = []
+        self._local_events = deque(maxlen=LOCAL_EVENTS_HISTORY)
         self.proxy_services = ProxyServices(hass, config_entry, self)
 
         self.set_connection_state(STATE_CONNECTING)
@@ -555,10 +561,13 @@ class RemoteConnection:
                 pass
         if self._remove_listener is not None:
             self._remove_listener()
+        for remove_listener in self._remove_event_listeners:
+            remove_listener()
 
         self.set_connection_state(STATE_DISCONNECTED)
         self._heartbeat_task = None
         self._remove_listener = None
+        self._remove_event_listeners = []
         self._entities = set()
         self._all_entity_names = set()
         if not self._is_stopping:
@@ -796,6 +805,18 @@ class RemoteConnection:
                 state_changed(entity_id, state, attr)
             else:
                 event = message["event"]
+                # The remote got this event from elsewhere and we already had
+                # it: it is coming back to us, firing it again would loop.
+                if (
+                    event.get("origin") == EventOrigin.remote.value
+                    and (event["event_type"], event["context"].get("id"))
+                    in self._local_events
+                ):
+                    _LOGGER.debug(
+                        "ignoring event %s sent back by remote instance",
+                        event["event_type"],
+                    )
+                    return
                 self._hass.bus.async_fire(
                     event_type=event["event_type"],
                     event_data=event["data"],
@@ -821,9 +842,25 @@ class RemoteConnection:
 
                 state_changed(entity_id, state, attributes)
 
+        @callback
+        def remember_local_event(event):
+            """Remember subscribed events seen on this instance.
+
+            If the remote instance also subscribed to them, it sends them
+            back to us; they are recognized and ignored in fire_event.
+            """
+            self._local_events.append((event.event_type, event.context.id))
+
         self._remove_listener = self._hass.bus.async_listen(
             EVENT_CALL_SERVICE, forward_event
         )
+
+        self._remove_event_listeners = [
+            self._hass.bus.async_listen(event_type, remember_local_event)
+            for event_type in self._subscribe_events.difference(
+                INTERNALLY_USED_EVENTS
+            )
+        ]
 
         for event in self._subscribe_events:
             await self.call(fire_event, "subscribe_events", event_type=event)

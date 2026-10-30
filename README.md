@@ -232,7 +232,7 @@ filter:
       required: false
       type: float
 subscribe_events:
-  description: Further list of events, which should be forwarded from the remote instance. If you override this, you probably will want to add state_changed!!
+  description: Further list of events, which should be forwarded from the remote instance. If you override this, you probably will want to add state_changed!! When two instances subscribe to the same event from each other, an event sent back by the remote instance is recognized and ignored, so it does not loop.
   required: false
   type: list
   default: 
